@@ -178,6 +178,7 @@
       }
       
       // Update description
+      var desc = variant.description
       if (variant.description && this.elements.description) {
         console.log('[ShopOS] Updating description');
         let formatted = variant.description;
