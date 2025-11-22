@@ -172,10 +172,17 @@
       // Update description
       if (variant.description && this.elements.description) {
         console.log('[ShopOS] Updating description');
-        const isHTML = variant.description.trim().startsWith('<');
-        this.elements.description.innerHTML = isHTML 
-          ? variant.description 
-          : `<p>${variant.description}</p>`;
+        let formatted = desc;
+
+        if (!desc.trim().startsWith('<')) {
+          // Convert \n\n into paragraph breaks
+          formatted = desc
+            .split(/\n\s*\n/)   // split double newlines
+            .map(p => `<p>${p.trim()}</p>`)
+            .join('');
+        }
+        
+        this.elements.description.innerHTML = formatted;
       }
       
       // Update CTA buttons text
