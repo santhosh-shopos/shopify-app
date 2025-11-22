@@ -116,6 +116,7 @@
       this.setupImageGallery();
       
       console.log('[ShopOS] ✅ Initialization complete');
+      console.log("Data set:", this.container.dataset)
     }
 
     /**
