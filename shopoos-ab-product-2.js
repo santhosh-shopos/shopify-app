@@ -112,8 +112,35 @@
       console.log(`[ShopOS] Product ID: ${this.productId}`);
       console.log('[ShopOS] Visibility settings:', this.visibilitySettings);
       
+      // Detect current theme
+      this.currentTheme = this.detectCurrentTheme();
+      
       // Initialize
       this.init();
+    }
+
+    /**
+     * Detect which theme is currently active
+     * @returns {string|null} Theme name or null
+     */
+    detectCurrentTheme() {
+      const themeClasses = [
+        'shopos-theme-light-classic',
+        'shopos-theme-light-modern',
+        'shopos-theme-light-minimal',
+        'shopos-theme-light-warm',
+        'shopos-theme-dark-classic',
+        'shopos-theme-dark-modern',
+        'shopos-theme-dark-minimal',
+        'shopos-theme-dark-warm'
+      ];
+      
+      for (const themeClass of themeClasses) {
+        if (this.container.classList.contains(themeClass)) {
+          return themeClass;
+        }
+      }
+      return null;
     }
 
     /**
@@ -121,6 +148,12 @@
      */
     init() {
       console.log('[ShopOS] Starting initialization...');
+      console.log('[ShopOS] Current theme:', this.currentTheme);
+      
+      // If theme is selected, check if we need to reset custom colors
+      if (this.currentTheme) {
+        this.resetCustomColorsForTheme();
+      }
       
       // Apply visibility settings
       this.applyVisibilitySettings();
@@ -137,7 +170,7 @@
       // Adjust layout based on visible elements
       this.adjustLayout();
       
-      // Handle custom colors
+      // Handle custom colors (only if theme allows or no theme selected)
       this.handleCustomColors();
       
       console.log('[ShopOS] ✅ Initialization complete');
@@ -145,9 +178,95 @@
     }
 
     /**
+     * Reset custom colors when theme is selected
+     * Uses localStorage to track theme changes and clear custom colors
+     */
+    resetCustomColorsForTheme() {
+      const storageKey = `shopos_last_theme_${this.productId}`;
+      const customColorsKey = `shopos_has_custom_colors_${this.productId}`;
+      const lastTheme = localStorage.getItem(storageKey);
+      
+      // Get current inline style to check for custom colors
+      const currentStyle = this.container.getAttribute('style') || '';
+      const hasCustomColors = currentStyle.includes('--shopos-custom-');
+      
+      // Check if theme changed
+      const themeChanged = lastTheme && lastTheme !== this.currentTheme;
+      
+      if (themeChanged) {
+        console.log('[ShopOS] Theme changed from', lastTheme, 'to', this.currentTheme);
+        console.log('[ShopOS] Clearing custom colors for new theme');
+        
+        // Theme changed - clear all custom color CSS variables
+        this.clearCustomColorsFromStyles();
+        localStorage.setItem(customColorsKey, 'false');
+      } else if (!lastTheme && this.currentTheme) {
+        // First time with theme selected - clear custom colors
+        console.log('[ShopOS] First load with theme selected - clearing custom colors');
+        this.clearCustomColorsFromStyles();
+        localStorage.setItem(customColorsKey, 'false');
+      } else if (hasCustomColors) {
+        // Custom colors are present - user explicitly set them after theme
+        console.log('[ShopOS] Custom colors detected - preserving user overrides');
+        localStorage.setItem(customColorsKey, 'true');
+        // Keep data-custom-colors attribute so they're applied
+        this.container.setAttribute('data-custom-colors', 'true');
+      }
+      
+      // Store current theme for next check
+      if (this.currentTheme) {
+        localStorage.setItem(storageKey, this.currentTheme);
+      }
+    }
+
+    /**
+     * Clear custom color CSS variables from inline styles
+     */
+    clearCustomColorsFromStyles() {
+      let currentStyle = this.container.getAttribute('style') || '';
+      
+      if (!currentStyle) {
+        this.container.removeAttribute('data-custom-colors');
+        return;
+      }
+      
+      // Remove custom color CSS variables
+      currentStyle = currentStyle
+        .replace(/--shopos-custom-bg:\s*[^;]+;?/gi, '')
+        .replace(/--shopos-custom-text:\s*[^;]+;?/gi, '')
+        .replace(/--shopos-custom-button:\s*[^;]+;?/gi, '')
+        .trim();
+      
+      // Clean up any double semicolons or trailing semicolons
+      currentStyle = currentStyle.replace(/;+/g, ';').replace(/^;|;$/g, '').replace(/^\s*;\s*|\s*;\s*$/g, '');
+      
+      // Update or remove style attribute
+      if (currentStyle && currentStyle.length > 0 && currentStyle !== ';') {
+        this.container.setAttribute('style', currentStyle);
+      } else {
+        this.container.removeAttribute('style');
+      }
+      
+      // Remove data-custom-colors attribute since colors are cleared
+      this.container.removeAttribute('data-custom-colors');
+      
+      console.log('[ShopOS] Custom colors cleared from inline styles');
+    }
+
+    /**
      * Handle custom colors - set button text color and dimmed variants
+     * Only applies if custom colors are present (not cleared by theme)
      */
     handleCustomColors() {
+      // Check if custom colors were cleared by theme selection
+      // If theme is selected and we just cleared colors, skip custom color handling
+      const hasCustomColors = this.container.hasAttribute('data-custom-colors');
+      
+      if (!hasCustomColors && this.currentTheme) {
+        console.log('[ShopOS] Theme selected - skipping custom color handling');
+        return;
+      }
+      
       // Get custom button color from CSS variable
       const computedStyle = window.getComputedStyle(this.container);
       const customButtonColor = computedStyle.getPropertyValue('--shopos-custom-button').trim();
