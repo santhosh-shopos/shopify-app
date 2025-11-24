@@ -74,6 +74,15 @@
       this.container = container;
       this.productId = container.dataset.productId;
       
+      // Get visibility settings
+      this.visibilitySettings = {
+        showImages: container.dataset.showImages === 'true',
+        showTitle: container.dataset.showTitle === 'true',
+        showPrice: container.dataset.showPrice === 'true',
+        showCtas: container.dataset.showCtas === 'true',
+        showDescription: container.dataset.showDescription === 'true'
+      };
+      
       // Cache DOM elements
       this.elements = {
         mainImage: container.querySelector('#shopos-full-main-image'),
@@ -87,7 +96,13 @@
         variantSelect: container.querySelector('#shopos-full-variant-select'),
         quantityInput: container.querySelector('#shopos-full-quantity'),
         successMessage: container.querySelector('#shopos-full-success-message'),
-        errorMessage: container.querySelector('#shopos-full-error-message')
+        errorMessage: container.querySelector('#shopos-full-error-message'),
+        imagesSection: container.querySelector('.shopos-product-images-section'),
+        titleSection: container.querySelector('.shopos-ab-test-product-title'),
+        priceSection: container.querySelector('.shopos-product-price-section'),
+        ctasSection: container.querySelector('.shopos-ab-test-product-ctas'),
+        descriptionSection: container.querySelector('.shopos-ab-test-product-description'),
+        productContainer: container.querySelector('.shopos-product-container')
       };
       
       // Gallery state
@@ -95,6 +110,7 @@
       this.images = [];
       
       console.log(`[ShopOS] Product ID: ${this.productId}`);
+      console.log('[ShopOS] Visibility settings:', this.visibilitySettings);
       
       // Initialize
       this.init();
@@ -106,6 +122,9 @@
     init() {
       console.log('[ShopOS] Starting initialization...');
       
+      // Apply visibility settings
+      this.applyVisibilitySettings();
+      
       // Apply A/B test variant if available
       this.applyABTestVariant();
       
@@ -115,8 +134,230 @@
       // Setup image gallery
       this.setupImageGallery();
       
+      // Adjust layout based on visible elements
+      this.adjustLayout();
+      
+      // Handle custom colors
+      this.handleCustomColors();
+      
       console.log('[ShopOS] ✅ Initialization complete');
       console.log("Data set:", this.container.dataset)
+    }
+
+    /**
+     * Handle custom colors - set button text color and dimmed variants
+     */
+    handleCustomColors() {
+      // Get custom button color from CSS variable
+      const computedStyle = window.getComputedStyle(this.container);
+      const customButtonColor = computedStyle.getPropertyValue('--shopos-custom-button').trim();
+      
+      if (customButtonColor) {
+        console.log('[ShopOS] Custom button color detected:', customButtonColor);
+        
+        // Parse color to RGB
+        const rgb = this.parseColorToRGB(customButtonColor);
+        if (rgb) {
+          // Calculate brightness to determine text color
+          const brightness = this.getColorBrightness(customButtonColor);
+          
+          // Set text color on buttons
+          const textColor = brightness > 128 ? '#000000' : '#ffffff';
+          if (this.elements.addToCartBtn) {
+            this.elements.addToCartBtn.style.color = textColor;
+          }
+          if (this.elements.buyNowBtn) {
+            this.elements.buyNowBtn.style.color = textColor;
+          }
+          
+          // Set text color on discount badge if it exists
+          const discountBadge = this.container.querySelector('.shopos-discount-badge');
+          if (discountBadge) {
+            discountBadge.style.color = textColor;
+          }
+          
+          // Calculate and set dimmed versions for related elements
+          const dim1 = this.darkenColor(rgb, 0.3); // 70% opacity equivalent
+          const dim2 = this.darkenColor(rgb, 0.5); // 50% opacity equivalent
+          const dim3 = this.darkenColor(rgb, 0.7); // 30% opacity equivalent
+          const hover = this.darkenColor(rgb, 0.15); // Slightly darker for hover
+          
+          // Set dimmed colors as CSS variables
+          this.container.style.setProperty('--shopos-button-dim-1', `rgba(${dim1.r}, ${dim1.g}, ${dim1.b}, 0.7)`);
+          this.container.style.setProperty('--shopos-button-dim-2', `rgba(${dim2.r}, ${dim2.g}, ${dim2.b}, 0.5)`);
+          this.container.style.setProperty('--shopos-button-dim-3', `rgba(${dim3.r}, ${dim3.g}, ${dim3.b}, 0.3)`);
+          this.container.style.setProperty('--shopos-button-hover', `rgb(${hover.r}, ${hover.g}, ${hover.b})`);
+          
+          console.log('[ShopOS] Custom button color variants set');
+        }
+      }
+    }
+
+    /**
+     * Parse color string to RGB object
+     * @param {string} color - Color in hex, rgb, or rgba format
+     * @returns {Object|null} {r, g, b} or null
+     */
+    parseColorToRGB(color) {
+      if (!color) return null;
+      
+      // Handle hex colors
+      if (color.startsWith('#')) {
+        const hex = color.slice(1);
+        if (hex.length === 3) {
+          return {
+            r: parseInt(hex[0] + hex[0], 16),
+            g: parseInt(hex[1] + hex[1], 16),
+            b: parseInt(hex[2] + hex[2], 16)
+          };
+        } else if (hex.length === 6) {
+          return {
+            r: parseInt(hex.slice(0, 2), 16),
+            g: parseInt(hex.slice(2, 4), 16),
+            b: parseInt(hex.slice(4, 6), 16)
+          };
+        }
+      }
+      // Handle rgb/rgba colors
+      else if (color.startsWith('rgb')) {
+        const matches = color.match(/\d+/g);
+        if (matches && matches.length >= 3) {
+          return {
+            r: parseInt(matches[0]),
+            g: parseInt(matches[1]),
+            b: parseInt(matches[2])
+          };
+        }
+      }
+      
+      return null;
+    }
+
+    /**
+     * Darken a color by a factor (0-1)
+     * @param {Object} rgb - {r, g, b} color object
+     * @param {number} factor - Darkening factor (0 = no change, 1 = black)
+     * @returns {Object} Darkened {r, g, b} color
+     */
+    darkenColor(rgb, factor) {
+      return {
+        r: Math.max(0, Math.floor(rgb.r * (1 - factor))),
+        g: Math.max(0, Math.floor(rgb.g * (1 - factor))),
+        b: Math.max(0, Math.floor(rgb.b * (1 - factor)))
+      };
+    }
+
+    /**
+     * Calculate brightness of a color (0-255)
+     * @param {string} color - Color in hex, rgb, or rgba format
+     * @returns {number} Brightness value (0-255)
+     */
+    getColorBrightness(color) {
+      if (!color) return 128;
+      
+      // Convert to RGB
+      let r, g, b;
+      
+      // Handle hex colors
+      if (color.startsWith('#')) {
+        const hex = color.slice(1);
+        if (hex.length === 3) {
+          r = parseInt(hex[0] + hex[0], 16);
+          g = parseInt(hex[1] + hex[1], 16);
+          b = parseInt(hex[2] + hex[2], 16);
+        } else if (hex.length === 6) {
+          r = parseInt(hex.slice(0, 2), 16);
+          g = parseInt(hex.slice(2, 4), 16);
+          b = parseInt(hex.slice(4, 6), 16);
+        }
+      }
+      // Handle rgb/rgba colors
+      else if (color.startsWith('rgb')) {
+        const matches = color.match(/\d+/g);
+        if (matches && matches.length >= 3) {
+          r = parseInt(matches[0]);
+          g = parseInt(matches[1]);
+          b = parseInt(matches[2]);
+        }
+      }
+      
+      if (r === undefined || g === undefined || b === undefined) {
+        return 128; // Default to medium brightness
+      }
+      
+      // Calculate relative luminance using standard formula
+      // https://www.w3.org/TR/WCAG20/#relativeluminancedef
+      const [rs, gs, bs] = [r, g, b].map(val => {
+        val = val / 255;
+        return val <= 0.03928 ? val / 12.92 : Math.pow((val + 0.055) / 1.055, 2.4);
+      });
+      
+      const luminance = 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+      
+      // Return brightness as 0-255 value
+      return luminance * 255;
+    }
+
+    /**
+     * Apply visibility settings from block settings
+     */
+    applyVisibilitySettings() {
+      // Hide/show sections based on settings
+      if (this.elements.imagesSection) {
+        this.elements.imagesSection.style.display = this.visibilitySettings.showImages ? '' : 'none';
+      }
+      if (this.elements.titleSection) {
+        this.elements.titleSection.style.display = this.visibilitySettings.showTitle ? '' : 'none';
+      }
+      if (this.elements.priceSection) {
+        this.elements.priceSection.style.display = this.visibilitySettings.showPrice ? '' : 'none';
+      }
+      if (this.elements.ctasSection) {
+        this.elements.ctasSection.style.display = this.visibilitySettings.showCtas ? '' : 'none';
+      }
+      if (this.elements.descriptionSection) {
+        this.elements.descriptionSection.style.display = this.visibilitySettings.showDescription ? '' : 'none';
+      }
+      
+      console.log('[ShopOS] Visibility settings applied');
+    }
+
+    /**
+     * Adjust layout based on visible elements
+     */
+    adjustLayout() {
+      if (!this.elements.productContainer) return;
+      
+      // Count visible sections in info section
+      const infoSection = this.elements.productContainer.querySelector('.shopos-product-info-section');
+      const descriptionSection = this.elements.descriptionSection;
+      
+      let visibleInfoChildren = 0;
+      if (infoSection) {
+        visibleInfoChildren = Array.from(infoSection.children).filter(
+          child => {
+            const style = window.getComputedStyle(child);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+          }
+        ).length;
+      }
+      
+      const descriptionVisible = descriptionSection && 
+        window.getComputedStyle(descriptionSection).display !== 'none' &&
+        window.getComputedStyle(descriptionSection).visibility !== 'hidden';
+      
+      const imagesVisible = this.visibilitySettings.showImages && 
+        this.elements.imagesSection && 
+        window.getComputedStyle(this.elements.imagesSection).display !== 'none';
+      
+      // If only images are visible (no info section children, no description), center them
+      if (imagesVisible && visibleInfoChildren === 0 && !descriptionVisible) {
+        this.elements.productContainer.classList.add('shopos-images-only');
+      } else {
+        this.elements.productContainer.classList.remove('shopos-images-only');
+      }
+      
+      console.log('[ShopOS] Layout adjusted - Images visible:', imagesVisible, 'Info children:', visibleInfoChildren, 'Description visible:', descriptionVisible);
     }
 
     /**
@@ -135,7 +376,7 @@
         // Fallback: use Shopify product images (Liquid JSON)
         const defaultImages = JSON.parse(this.container.dataset.shopifyImages || '[]');
       
-        if (defaultImages.length > 0) {
+        if (defaultImages.length > 0 && this.visibilitySettings.showImages) {
           this.updateImages(defaultImages);
         }
       
@@ -166,20 +407,20 @@
       console.log('[ShopOS AB Test] Applying variant data:', variant);
       
       // Update images
-      if (variant.images && variant.images.length > 0) {
+      if (variant.images && variant.images.length > 0 && this.visibilitySettings.showImages) {
         console.log(`[ShopOS] Updating images (${variant.images.length} total)`);
         this.updateImages(variant.images);
       }
       
       // Update title
-      if (variant.title && this.elements.title) {
+      if (variant.title && this.elements.title && this.visibilitySettings.showTitle) {
         console.log('[ShopOS] Updating title:', variant.title);
         this.elements.title.textContent = variant.title;
       }
       
       // Update description
       var desc = variant.description
-      if (variant.description && this.elements.description) {
+      if (variant.description && this.elements.description && this.visibilitySettings.showDescription) {
         console.log('[ShopOS] Updating description');
         let formatted = variant.description;
 
@@ -195,7 +436,7 @@
       }
       
       // Update CTA buttons text
-      if (variant.addToCartText && this.elements.addToCartBtn) {
+      if (variant.addToCartText && this.elements.addToCartBtn && this.visibilitySettings.showCtas) {
         const btnText = this.elements.addToCartBtn.querySelector('.shopos-btn-text');
         if (btnText) {
           console.log('[ShopOS] Updating Add to Cart button text:', variant.addToCartText);
@@ -203,13 +444,16 @@
         }
       }
       
-      if (variant.buyNowText && this.elements.buyNowBtn) {
+      if (variant.buyNowText && this.elements.buyNowBtn && this.visibilitySettings.showCtas) {
         const btnText = this.elements.buyNowBtn.querySelector('.shopos-btn-text');
         if (btnText) {
           console.log('[ShopOS] Updating Buy Now button text:', variant.buyNowText);
           btnText.textContent = variant.buyNowText;
         }
       }
+      
+      // Adjust layout after variant is applied
+      this.adjustLayout();
     }
 
     /**
@@ -468,7 +712,18 @@
       const variantId = formData.get('id');
       const quantity = parseInt(formData.get('quantity')) || 1;
       
-      console.log('[ShopOS CTA] Adding to cart:', { variantId, quantity });
+      // Get A/B test variant assignment
+      const abAssignment = getABAssignment(this.productId);
+      
+      // Prepare metadata
+      const metadata = {
+        shopos_product_id: this.productId,
+        shopos_ab_variant: abAssignment,
+        shopos_component: 'product-full',
+        shopos_timestamp: new Date().toISOString()
+      };
+      
+      console.log('[ShopOS CTA] Adding to cart:', { variantId, quantity, metadata });
       
       this.setButtonLoading(this.elements.addToCartBtn, true);
       this.hideMessages();
@@ -482,7 +737,10 @@
           },
           body: JSON.stringify({
             id: variantId,
-            quantity: quantity
+            quantity: quantity,
+            properties: {
+              _shopos_metadata: JSON.stringify(metadata)
+            }
           })
         });
         
@@ -520,7 +778,19 @@
       const variantId = formData.get('id');
       const quantity = parseInt(formData.get('quantity')) || 1;
       
-      console.log('[ShopOS CTA] Processing Buy Now:', { variantId, quantity });
+      // Get A/B test variant assignment
+      const abAssignment = getABAssignment(this.productId);
+      
+      // Prepare metadata
+      const metadata = {
+        shopos_product_id: this.productId,
+        shopos_ab_variant: abAssignment,
+        shopos_component: 'product-full',
+        shopos_action: 'buy_now',
+        shopos_timestamp: new Date().toISOString()
+      };
+      
+      console.log('[ShopOS CTA] Processing Buy Now:', { variantId, quantity, metadata });
       
       this.setButtonLoading(this.elements.buyNowBtn, true);
       this.hideMessages();
@@ -534,7 +804,10 @@
           },
           body: JSON.stringify({
             id: variantId,
-            quantity: quantity
+            quantity: quantity,
+            properties: {
+              _shopos_metadata: JSON.stringify(metadata)
+            }
           })
         });
         
@@ -543,6 +816,10 @@
         }
         
         console.log('[ShopOS CTA] ✅ Buy Now successful, redirecting to checkout...');
+        
+        // Store metadata in sessionStorage for checkout webhook
+        sessionStorage.setItem('shopos_checkout_metadata', JSON.stringify(metadata));
+        
         window.location.href = '/checkout';
         
       } catch (error) {
